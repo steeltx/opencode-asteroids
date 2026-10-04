@@ -118,6 +118,59 @@ class Asteroid {
   }
 }
 
+const SHOOTING_STAR_SPEED = 240;
+const SHOOTING_STAR_LIFETIME = 6;
+
+class ShootingStar extends Asteroid {
+  constructor(x, y) {
+    super(x, y, 1);
+    const angle = Math.atan2(this.vy, this.vx);
+    this.vx = Math.cos(angle) * SHOOTING_STAR_SPEED;
+    this.vy = Math.sin(angle) * SHOOTING_STAR_SPEED;
+    this.ttl = SHOOTING_STAR_LIFETIME;
+  }
+
+  update(dt) {
+    super.update(dt);
+    this.ttl -= dt;
+    if (this.ttl <= 0) this.dead = true;
+  }
+
+  split() {
+    return [];
+  }
+
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, this.ttl));
+    ctx.translate(this.x, this.y);
+    ctx.rotate(Math.atan2(this.vy, this.vx));
+    const trail = ctx.createLinearGradient(-70, 0, 0, 0);
+    trail.addColorStop(0, 'rgba(255, 215, 0, 0)');
+    trail.addColorStop(1, '#ffd700');
+    ctx.fillStyle = trail;
+    ctx.beginPath();
+    ctx.moveTo(-70, 0);
+    ctx.lineTo(0, -7);
+    ctx.lineTo(0, 7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#fff3b0';
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const angle = i * Math.PI / 5;
+      const radius = i % 2 === 0 ? this.radius : this.radius / 2;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 const SPEED_BOOST_DURATION = 5;
 const SPEED_POWER_UP_CHANCE = 0.15;
 
@@ -292,6 +345,7 @@ function spawnAsteroids(count) {
     } while (Math.hypot(x - W / 2, y - H / 2) < SAFE_DIST);
     asteroids.push(new Asteroid(x, y, 3));
   }
+  asteroids.push(new ShootingStar(0, rand(0, H)));
 }
 
 function initGame() {
@@ -350,6 +404,7 @@ function update(dt) {
     particles.forEach(p => p.update(dt));
     particles = particles.filter(p => !p.dead);
     asteroids.forEach(a => a.update(dt));
+    asteroids = asteroids.filter(a => !a.dead);
     if (deadTimer <= 0) { state = 'playing'; ship.reset(); }
     return;
   }
