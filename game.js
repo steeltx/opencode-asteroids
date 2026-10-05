@@ -173,6 +173,8 @@ class ShootingStar extends Asteroid {
 
 const SPEED_BOOST_DURATION = 5;
 const SPEED_POWER_UP_CHANCE = 0.15;
+const SHIELD_DURATION = 5;
+const SHIELD_POWER_UP_CHANCE = 0.15;
 
 class SpeedPowerUp {
   constructor(x, y) {
@@ -184,6 +186,10 @@ class SpeedPowerUp {
 
   update(dt) {
     this.ttl -= dt;
+  }
+
+  apply(ship) {
+    ship.speedBoostRemaining = SPEED_BOOST_DURATION;
   }
 
   draw() {
@@ -208,6 +214,32 @@ class SpeedPowerUp {
   }
 }
 
+class ShieldPowerUp extends SpeedPowerUp {
+  apply(ship) {
+    ship.shieldRemaining = SHIELD_DURATION;
+  }
+
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.strokeStyle = '#448aff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-7, -7);
+    ctx.lineTo(0, -10);
+    ctx.lineTo(7, -7);
+    ctx.lineTo(7, 1);
+    ctx.quadraticCurveTo(7, 6, 0, 10);
+    ctx.quadraticCurveTo(-7, 6, -7, 1);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 // ── Ship ──────────────────────────────────────────────────────────────────────
 class Ship {
   constructor() { this.reset(); }
@@ -224,10 +256,12 @@ class Ship {
     this.shootCooldown = 0;
     this.dead          = false;
     this.speedBoostRemaining = 0;
+    this.shieldRemaining = 0;
   }
 
   update(dt) {
     if (this.dead) return;
+    this.shieldRemaining = Math.max(0, this.shieldRemaining - dt);
     if (this.invincible    > 0) this.invincible    -= dt;
     if (this.shootCooldown > 0) this.shootCooldown -= dt;
 
@@ -264,6 +298,17 @@ class Ship {
 
   draw() {
     if (this.dead) return;
+    if (this.shieldRemaining > 0) {
+      ctx.save();
+      ctx.strokeStyle = '#448aff';
+      ctx.fillStyle = 'rgba(68, 138, 255, 0.12)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 28, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
     // Parpadeo durante invencibilidad de reaparición
     if (this.invincible > 0 && Math.floor(this.invincible * 8) % 2 === 0) return;
 
@@ -378,6 +423,7 @@ function killShip() {
   explode(ship.x, ship.y, 14);
   ship.dead = true;
   ship.speedBoostRemaining = 0;
+  ship.shieldRemaining = 0;
   lives--;
   if (lives <= 0) {
     state = 'gameover';
@@ -434,6 +480,9 @@ function update(dt) {
         if (Math.random() < SPEED_POWER_UP_CHANCE) {
           powerUps.push(new SpeedPowerUp(a.x, a.y));
         }
+        if (Math.random() < SHIELD_POWER_UP_CHANCE) {
+          powerUps.push(new ShieldPowerUp(a.x, a.y));
+        }
         newAsteroids.push(...a.split());
       }
     }
@@ -442,7 +491,7 @@ function update(dt) {
   bullets   = bullets.filter(b => !b.dead);
 
   // Nave vs asteroide
-  if (ship.invincible <= 0) {
+  if (ship.invincible <= 0 && ship.shieldRemaining <= 0) {
     for (const a of asteroids) {
       if (dist(ship, a) < ship.radius + a.radius * 0.82) {
         killShip();
@@ -454,7 +503,7 @@ function update(dt) {
   if (state === 'playing') {
     powerUps = powerUps.filter(powerUp => {
       if (dist(ship, powerUp) >= ship.radius + powerUp.radius) return true;
-      ship.speedBoostRemaining = SPEED_BOOST_DURATION;
+      powerUp.apply(ship);
       return false;
     });
   }
@@ -490,6 +539,11 @@ function drawHUD() {
   if (ship.speedBoostRemaining > 0) {
     ctx.fillStyle = '#00e5ff';
     ctx.fillText(`VELOCIDAD ${ship.speedBoostRemaining.toFixed(1)}s`, 14, 50);
+    ctx.fillStyle = '#fff';
+  }
+  if (ship.shieldRemaining > 0) {
+    ctx.fillStyle = '#448aff';
+    ctx.fillText(`ESCUDO ${ship.shieldRemaining.toFixed(1)}s`, 14, 74);
     ctx.fillStyle = '#fff';
   }
 
