@@ -5,6 +5,56 @@ const ctx = canvas.getContext('2d');
 const W = 800;
 const H = 600;
 
+const SHIP_SKINS = [
+  { id: 'classic', name: 'Clásica', color: '#fff', flame: '#ff8200', vertices: [[20, 0], [-12, -9], [-7, 0], [-12, 9]] },
+  { id: 'neon', name: 'Neón', color: '#00e5ff', flame: '#ff46dc', vertices: [[20, 0], [-10, -10], [-4, 0], [-10, 10]] },
+  { id: 'fighter', name: 'Caza', color: '#ff6262', flame: '#ffd700', vertices: [[20, 0], [0, -5], [-12, -11], [-9, 0], [-12, 11], [0, 5]] },
+  { id: 'retro', name: 'Retro', color: '#82ff82', flame: '#ffb347', vertices: [[20, 0], [5, -6], [5, -10], [-12, -10], [-7, 0], [-12, 10], [5, 10], [5, 6]] },
+];
+const SKIN_STORAGE_KEY = 'asteroids.shipSkin';
+let selectedSkin = SHIP_SKINS[0];
+
+function selectSkin(id) {
+  selectedSkin = SHIP_SKINS.find(skin => skin.id === id) || SHIP_SKINS[0];
+  try {
+    localStorage.setItem(SKIN_STORAGE_KEY, selectedSkin.id);
+  } catch {
+    // La selección sigue funcionando si el almacenamiento está bloqueado.
+  }
+}
+
+function initSkinSelector() {
+  try {
+    const savedId = localStorage.getItem(SKIN_STORAGE_KEY);
+    selectedSkin = SHIP_SKINS.find(skin => skin.id === savedId) || SHIP_SKINS[0];
+  } catch {
+    // Se conserva la skin predeterminada si no hay acceso al almacenamiento.
+  }
+  const selector = document.getElementById('skin-selector');
+  for (const skin of SHIP_SKINS) {
+    const option = document.createElement('option');
+    option.value = skin.id;
+    option.textContent = skin.name;
+    selector.appendChild(option);
+  }
+  selector.value = selectedSkin.id;
+  selector.addEventListener('change', () => selectSkin(selector.value));
+  selector.addEventListener('keydown', event => event.stopPropagation());
+  selector.addEventListener('keyup', event => event.stopPropagation());
+}
+
+function drawShipShape(scale = 1) {
+  ctx.strokeStyle = selectedSkin.color;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  selectedSkin.vertices.forEach(([x, y], index) => {
+    if (index === 0) ctx.moveTo(x * scale, y * scale);
+    else ctx.lineTo(x * scale, y * scale);
+  });
+  ctx.closePath();
+  ctx.stroke();
+}
+
 // ── Input ─────────────────────────────────────────────────────────────────────
 const keys = {};
 const justPressed = {};
@@ -270,18 +320,10 @@ class Ship {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    ctx.strokeStyle = '#fff';
     ctx.lineWidth   = 1.5;
     ctx.lineJoin    = 'round';
 
-    // Silueta clásica: triángulo con muesca trasera
-    ctx.beginPath();
-    ctx.moveTo( 20,  0);   // nariz
-    ctx.lineTo(-12, -9);   // ala izquierda
-    ctx.lineTo( -7,  0);   // muesca trasera
-    ctx.lineTo(-12,  9);   // ala derecha
-    ctx.closePath();
-    ctx.stroke();
+    drawShipShape();
 
     // Llama del propulsor
     if (this.thrusting && Math.random() > 0.35) {
@@ -289,7 +331,8 @@ class Ship {
       ctx.moveTo(-8, -4);
       ctx.lineTo(-8 - rand(6, 14), 0);
       ctx.lineTo(-8,  4);
-      ctx.strokeStyle = 'rgba(255, 130, 0, 0.85)';
+      ctx.strokeStyle = selectedSkin.flame;
+      ctx.globalAlpha = 0.85;
       ctx.stroke();
     }
 
@@ -468,16 +511,8 @@ function drawLifeIcon(x, y) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(-Math.PI / 2);
-  ctx.strokeStyle = '#fff';
   ctx.lineWidth   = 1.2;
-  ctx.lineJoin    = 'round';
-  ctx.beginPath();
-  ctx.moveTo( 9,  0);
-  ctx.lineTo(-6, -5);
-  ctx.lineTo(-3,  0);
-  ctx.lineTo(-6,  5);
-  ctx.closePath();
-  ctx.stroke();
+  drawShipShape(0.5);
   ctx.restore();
 }
 
@@ -538,5 +573,6 @@ function loop(ts) {
   requestAnimationFrame(loop);
 }
 
+initSkinSelector();
 initGame();
 requestAnimationFrame(loop);
