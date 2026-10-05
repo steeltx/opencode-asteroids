@@ -173,6 +173,9 @@ class ShootingStar extends Asteroid {
 
 const SPEED_BOOST_DURATION = 5;
 const SPEED_POWER_UP_CHANCE = 0.15;
+const TRIPLE_SHOT_DURATION = 5;
+const TRIPLE_SHOT_POWER_UP_CHANCE = 0.15;
+const BURST_SHOT_INTERVAL = 0.08;
 
 class SpeedPowerUp {
   constructor(x, y) {
@@ -184,6 +187,10 @@ class SpeedPowerUp {
 
   update(dt) {
     this.ttl -= dt;
+  }
+
+  activate(ship) {
+    ship.speedBoostRemaining = SPEED_BOOST_DURATION;
   }
 
   draw() {
@@ -208,6 +215,29 @@ class SpeedPowerUp {
   }
 }
 
+class TripleShotPowerUp extends SpeedPowerUp {
+  activate(ship) {
+    ship.tripleShotRemaining = TRIPLE_SHOT_DURATION;
+  }
+
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.strokeStyle = '#ff70df';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    for (const y of [-7, 0, 7]) {
+      ctx.moveTo(-6, y);
+      ctx.lineTo(6, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 // ── Ship ──────────────────────────────────────────────────────────────────────
 class Ship {
   constructor() { this.reset(); }
@@ -224,6 +254,10 @@ class Ship {
     this.shootCooldown = 0;
     this.dead          = false;
     this.speedBoostRemaining = 0;
+    this.tripleShotRemaining = 0;
+    this.burstShotsRemaining = 0;
+    this.burstTimer = 0;
+    this.burstAngle = this.angle;
   }
 
   update(dt) {
@@ -251,15 +285,37 @@ class Ship {
     this.x = wrap(this.x + this.vx * movementTime, W);
     this.y = wrap(this.y + this.vy * movementTime, H);
     this.speedBoostRemaining = Math.max(0, this.speedBoostRemaining - dt);
+    this.tripleShotRemaining = Math.max(0, this.tripleShotRemaining - dt);
   }
 
   tryShoot() {
     if (this.shootCooldown > 0 || this.dead) return [];
     this.shootCooldown = 0.2;
+    if (this.tripleShotRemaining > 0) {
+      this.burstShotsRemaining = 2;
+      this.burstTimer = BURST_SHOT_INTERVAL;
+      this.burstAngle = this.angle;
+    }
+    return [this.createBullet(this.angle)];
+  }
+
+  createBullet(angle) {
     const NOSE = 21;
-    const ox = this.x + Math.cos(this.angle) * NOSE;
-    const oy = this.y + Math.sin(this.angle) * NOSE;
-    return [new Bullet(ox, oy, this.angle)];
+    const ox = this.x + Math.cos(angle) * NOSE;
+    const oy = this.y + Math.sin(angle) * NOSE;
+    return new Bullet(ox, oy, angle);
+  }
+
+  updateBurst(dt) {
+    if (this.dead || this.burstShotsRemaining === 0) return [];
+    this.burstTimer -= dt;
+    const shots = [];
+    while (this.burstTimer <= 0 && this.burstShotsRemaining > 0) {
+      shots.push(this.createBullet(this.burstAngle));
+      this.burstShotsRemaining--;
+      this.burstTimer += BURST_SHOT_INTERVAL;
+    }
+    return shots;
   }
 
   draw() {
@@ -378,6 +434,8 @@ function killShip() {
   explode(ship.x, ship.y, 14);
   ship.dead = true;
   ship.speedBoostRemaining = 0;
+  ship.tripleShotRemaining = 0;
+  ship.burstShotsRemaining = 0;
   lives--;
   if (lives <= 0) {
     state = 'gameover';
@@ -409,6 +467,8 @@ function update(dt) {
     return;
   }
 
+  bullets.push(...ship.updateBurst(dt));
+
   // Disparar
   if (pressed('Space')) {
     bullets.push(...ship.tryShoot());
@@ -434,6 +494,9 @@ function update(dt) {
         if (Math.random() < SPEED_POWER_UP_CHANCE) {
           powerUps.push(new SpeedPowerUp(a.x, a.y));
         }
+        if (Math.random() < TRIPLE_SHOT_POWER_UP_CHANCE) {
+          powerUps.push(new TripleShotPowerUp(a.x, a.y));
+        }
         newAsteroids.push(...a.split());
       }
     }
@@ -454,7 +517,7 @@ function update(dt) {
   if (state === 'playing') {
     powerUps = powerUps.filter(powerUp => {
       if (dist(ship, powerUp) >= ship.radius + powerUp.radius) return true;
-      ship.speedBoostRemaining = SPEED_BOOST_DURATION;
+      powerUp.activate(ship);
       return false;
     });
   }
@@ -490,6 +553,11 @@ function drawHUD() {
   if (ship.speedBoostRemaining > 0) {
     ctx.fillStyle = '#00e5ff';
     ctx.fillText(`VELOCIDAD ${ship.speedBoostRemaining.toFixed(1)}s`, 14, 50);
+    ctx.fillStyle = '#fff';
+  }
+  if (ship.tripleShotRemaining > 0) {
+    ctx.fillStyle = '#ff70df';
+    ctx.fillText(`TRIPLE SHOT ${ship.tripleShotRemaining.toFixed(1)}s`, 14, 74);
     ctx.fillStyle = '#fff';
   }
 
